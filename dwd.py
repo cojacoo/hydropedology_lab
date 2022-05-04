@@ -173,7 +173,7 @@ def Te_opt(T_e,gammax, vabar):
         itc += 1
     return T_e
 
-def ET_SzilagyiJozsa(data, Elev, lat, windfunction_ver='1948', alpha=0.23, zerocorr=True):
+def ET_SzilagyiJozsa(data, Elev=120., lat=53.5, windfunction_ver='1948', alpha=0.23, zerocorr=True):
     # Taken from R package Evapotranspiration >> Danlu Guo <danlu.guo@adelaide.edu.au>
     # Daily Actual Evapotranspiration after Szilagyi, J. 2007, doi:10.1029/2006GL028708
     # data is assumed to be a pandas data frame with at least:
@@ -199,6 +199,8 @@ def ET_SzilagyiJozsa(data, Elev, lat, windfunction_ver='1948', alpha=0.23, zeroc
         Ta = data['Ta']
     elif ('T' in data.columns):
         Ta = data['T']
+    elif ('Temp' in data.columns):
+        Ta = data['Temp']
     else:
         Ta = (data['Tmax'] + data[
             'Tmin']) / 2  # Equation S2.1 in Tom McMahon's HESS 2013 paper, which in turn was based on Equation 9 in Allen et al, 1998.
@@ -219,6 +221,8 @@ def ET_SzilagyiJozsa(data, Elev, lat, windfunction_ver='1948', alpha=0.23, zeroc
 
     if 'Rs' in data.columns:
         R_s = data['Rs']
+    elif ('Rad' in data.columns):
+        R_s = data['Rad']*0.01
     else:
         print('Radiation data missing')
         return
@@ -294,6 +298,7 @@ def resample_DWD(stat='Norderney',calc_et=False, histo=False, ETclean0=True, rss
             dummy4 = dwd_recent(stat,'hourly','solar')
         except:
             dummy4 = dwd_recent('Norderney','hourly','solar')
+            print('Used Norderney Solar radiation because no radiation data at station!')
         dummy5 = dwd_recent(stat,'hourly','wind')
         dummy6 = dwd_recent(stat,'hourly','pressure')
     
@@ -322,7 +327,13 @@ def resample_DWD(stat='Norderney',calc_et=False, histo=False, ETclean0=True, rss
 
     if histo == True:
         if get_freq == 'hourly':
-            dummy4h = dwd_recent(stat,get_freq,'solar','historical')
+            try:
+                dummy4h = dwd_recent(stat, get_freq, 'solar', 'historical')
+                rad = dummy4h.FG_LBERG.resample(rss).sum()
+            except:
+                dummy4h = dwd_recent('Norderney', get_freq, 'solar','historical')
+                print('Used Norderney Solar radiation because no radiation data at station!')
+                rad = dummy4h.FG_LBERG.resample(rss).sum()
             dummy1h = dwd_recent(stat,get_freq,'precip','historical')
             dummy3h = dwd_recent(stat,get_freq,'temp','historical')
             dummy5h = dwd_recent(stat,get_freq,'wind','historical')
@@ -333,7 +344,7 @@ def resample_DWD(stat='Norderney',calc_et=False, histo=False, ETclean0=True, rss
                              dummy3h.TT_TU.resample(rss).min(),
                              dummy3h.TT_TU.resample(rss).max(),
                              dummy1h['  R1'].resample(rss).sum(), # > precip mm
-                             dummy4h.FG_LBERG.resample(rss).sum().loc[dummy3h.index[0]:], # > hourly sum of solar incoming radiation J/cm^2 
+                             rad.loc[dummy3h.index[0]:], # > hourly sum of solar incoming radiation J/cm^2
                              dummy3h.RF_TU.resample(rss).min(), # > RH_2m
                              dummy3h.RF_TU.resample(rss).max(),
                              dummy5h['   F'].resample(rss).mean(), # > mean windspeed m/s
