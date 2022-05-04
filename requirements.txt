@@ -1,6 +1,7 @@
 jupyter
 matplotlib
 numpy
+numba
 pandas
 seaborn
 scipy
