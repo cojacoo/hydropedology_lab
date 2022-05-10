@@ -1,6 +1,6 @@
 '''DWD Data Sampler
 collection of tools to easily get DWD station data
-(cc) conrad.jackisch@tbt.tu-freiberg.de 2021
+(cc) c.jackisch@tu-braunschweig.de 2019
 '''
 
 #todo bugs: if no hourly values exists it raises an error nobody will understand
@@ -137,22 +137,18 @@ def dwd_recent(stationname='Emden',freq='daily',param='precip',ti='recent'):
     r = requests.get(http_fi, allow_redirects=True)
     open('dummy.zip', 'wb').write(r.content)
 
-    if os.stat('dummy.zip').st_size<500:
-        print('Variable '+param+' not given at Station '+str(sid))
-        dummy = pd.DataFrame([])
-    else:
-        myzipfile = zipfile.ZipFile('dummy.zip')
+    myzipfile = zipfile.ZipFile('dummy.zip')
     
-        dummy = pd.read_csv(myzipfile.open(myzipfile.namelist()[-1]),sep=';',na_values=-999)
-        if freq == 'daily':
-            dummy.index = pd.to_datetime(dummy.MESS_DATUM.values,format='%Y%m%d')
-        elif freq == 'hourly':
-            if param == 'solar':
-                dummy.index = pd.to_datetime(dummy.MESS_DATUM.values,format='%Y%m%d%H:%M')
-            else:
-                dummy.index = pd.to_datetime(dummy.MESS_DATUM.values,format='%Y%m%d%H')
+    dummy = pd.read_csv(myzipfile.open(myzipfile.namelist()[-1]),sep=';',na_values=-999)
+    if freq == 'daily':
+        dummy.index = pd.to_datetime(dummy.MESS_DATUM.values,format='%Y%m%d')
+    elif freq == 'hourly':
+        if param == 'solar':
+            dummy.index = pd.to_datetime(dummy.MESS_DATUM.values,format='%Y%m%d%H:%M')
+        else:
+            dummy.index = pd.to_datetime(dummy.MESS_DATUM.values,format='%Y%m%d%H')
         
-        os.remove('dummy.zip')
+    os.remove('dummy.zip')
     
     return dummy
     #return http_fi
@@ -173,7 +169,7 @@ def Te_opt(T_e,gammax, vabar):
         itc += 1
     return T_e
 
-def ET_SzilagyiJozsa(data, Elev=120., lat=53.5, windfunction_ver='1948', alpha=0.23, zerocorr=True):
+def ET_SzilagyiJozsa(data, Elev = 120., lat = 53.5, windfunction_ver='1948', alpha=0.23, zerocorr=True):
     # Taken from R package Evapotranspiration >> Danlu Guo <danlu.guo@adelaide.edu.au>
     # Daily Actual Evapotranspiration after Szilagyi, J. 2007, doi:10.1029/2006GL028708
     # data is assumed to be a pandas data frame with at least:
@@ -269,7 +265,7 @@ def ET_SzilagyiJozsa(data, Elev=120., lat=53.5, windfunction_ver='1948', alpha=0
     T_e = Ta
     gammax = Ta - 1 / gamma * (1 - R_ng / (lambdax * Epenman_Daily))
 
-    T_e = Te_opt(T_e.values, gammax.values, vabar.values)
+    T_e = Te_opt(T_e.values.astype(np.float64), gammax.values, vabar.values.astype(np.float64))
     T_e = pd.Series(T_e, index=Ta.index)
 
     deltaT_e = 4098 * (0.6108 * np.exp((17.27 * T_e) / (T_e + 237.3))) / (
@@ -302,8 +298,7 @@ def resample_DWD(stat='Norderney',calc_et=False, histo=False, ETclean0=True, rss
         dummy5 = dwd_recent(stat,'hourly','wind')
         dummy6 = dwd_recent(stat,'hourly','pressure')
     
-        try:
-            dummyx = pd.concat([dummy3.TT_TU.resample(rss).mean(), # > AirT_2m °C
+        dummyx = pd.concat([dummy3.TT_TU.resample(rss).mean(), # > AirT_2m °C
                         dummy3.TT_TU.resample(rss).min(),
                         dummy3.TT_TU.resample(rss).max(),
                         dummy1['  R1'].resample(rss).sum(), # > precip mm
@@ -312,17 +307,7 @@ def resample_DWD(stat='Norderney',calc_et=False, histo=False, ETclean0=True, rss
                         dummy3.RF_TU.resample(rss).max(),
                         dummy5['   F'].resample(rss).mean(), # > mean windspeed m/s
                         dummy6['   P'].resample(rss).mean()],axis=1) # > mean air pressure hPa
-            dummyx.columns = ['T','Tmin','Tmax','Prec','Rad','RHmin','RHmax','u2','aP']
-        except:
-            dummyx = pd.concat([dummy3.TT_TU.resample(rss).mean(), # > AirT_2m °C
-                        dummy3.TT_TU.resample(rss).min(),
-                        dummy3.TT_TU.resample(rss).max(),
-                        dummy1['  R1'].resample(rss).sum(), # > precip mm
-                        dummy3.RF_TU.resample(rss).min(), # > RH_2m
-                        dummy3.RF_TU.resample(rss).max(),
-                        dummy5['   F'].resample(rss).mean(), # > mean windspeed m/s
-                        dummy6['   P'].resample(rss).mean()],axis=1) # > mean air pressure hPa
-            dummyx.columns = ['T','Tmin','Tmax','Prec','RHmin','RHmax','u2','aP']
+        dummyx.columns = ['T','Tmin','Tmax','Prec','Rad','RHmin','RHmax','u2','aP']
 
 
     if histo == True:
@@ -334,13 +319,13 @@ def resample_DWD(stat='Norderney',calc_et=False, histo=False, ETclean0=True, rss
                 dummy4h = dwd_recent('Norderney', get_freq, 'solar','historical')
                 print('Used Norderney Solar radiation because no radiation data at station!')
                 rad = dummy4h.FG_LBERG.resample(rss).sum()
+
             dummy1h = dwd_recent(stat,get_freq,'precip','historical')
             dummy3h = dwd_recent(stat,get_freq,'temp','historical')
             dummy5h = dwd_recent(stat,get_freq,'wind','historical')
             dummy6h = dwd_recent(stat,get_freq,'pressure','historical')
 
-            try:
-                dummyxh = pd.concat([dummy3h.TT_TU.resample(rss).mean(), # > AirT_2m °C
+            dummyxh = pd.concat([dummy3h.TT_TU.resample(rss).mean(), # > AirT_2m °C
                              dummy3h.TT_TU.resample(rss).min(),
                              dummy3h.TT_TU.resample(rss).max(),
                              dummy1h['  R1'].resample(rss).sum(), # > precip mm
@@ -350,19 +335,8 @@ def resample_DWD(stat='Norderney',calc_et=False, histo=False, ETclean0=True, rss
                              dummy5h['   F'].resample(rss).mean(), # > mean windspeed m/s
                              dummy6h['   P'].resample(rss).mean()],axis=1) # # > mean air pressure hPa
 
-                dummyxh.columns = ['T','Tmin','Tmax','Prec','Rad','RHmin','RHmax','u2','aP']
-            except:
-                dummyxh = pd.concat([dummy3h.TT_TU.resample(rss).mean(), # > AirT_2m °C
-                             dummy3h.TT_TU.resample(rss).min(),
-                             dummy3h.TT_TU.resample(rss).max(),
-                             dummy1h['  R1'].resample(rss).sum(), # > precip mm
-                             dummy3h.RF_TU.resample(rss).min(), # > RH_2m
-                             dummy3h.RF_TU.resample(rss).max(),
-                             dummy5h['   F'].resample(rss).mean(), # > mean windspeed m/s
-                             dummy6h['   P'].resample(rss).mean()],axis=1) # # > mean air pressure hPa
-
-                dummyxh.columns = ['T','Tmin','Tmax','Prec','RHmin','RHmax','u2','aP']
-
+            dummyxh.columns = ['T','Tmin','Tmax','Prec','Rad','RHmin','RHmax','u2','aP']
+        
             dummyx = pd.concat([dummyxh.loc[:dummyx.index[0]],dummyx])
             dummyx = dummyx[~pd.Index.duplicated(dummyx.index,keep='first')]
 
