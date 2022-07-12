@@ -9,3 +9,4 @@ statsmodels
 plotly
 scikit-learn
 pyproj
+xarray
