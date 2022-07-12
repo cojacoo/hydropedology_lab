@@ -10,3 +10,4 @@ plotly
 scikit-learn
 pyproj
 xarray
+netcdf4
