@@ -1,13 +1,18 @@
 setwd('~/Documents/TUBAF/teaching/hydropedology/uebung/hydropedology_lab/modelling_project/')
 library(airGRteaching)
+library(dplyr)
+library(zoo)
 library(lubridate)
 
 carlsfeld <- read.csv('WBcarlsfeld1D.csv', header = TRUE, stringsAsFactors = FALSE)
-carlsfeld$X <- as.POSIXct(carlsfeld$X, tz = "UTC")
+carlsfeld$X <- as.POSIXct(carlsfeld$X, tz = 'UTC')
+carlsfeld$ETo[carlsfeld$ETo<0.] <- 0.
+carlsfeld$BachOst[carlsfeld$BachOst<0.0001] <- 0.0001
+carlsfeld$Wilzsch[carlsfeld$Wilzsch<0.0001] <- 0.0001
+carlsfeld <- carlsfeld %>% mutate(T = na.approx(T))
 
-ShinyGR(ObsDF = carlsfeld[1096:2253, c('X', 'Prec', 'ETo', 'BachOst', 'T')], SimPer = c("2014-10-01", "2017-10-30"))
-ShinyGR(ObsDF = carlsfeld[731:1860, c('X', 'Prec', 'ETo', 'Wilzsch', 'T')], SimPer = c("2013-10-01", "2016-10-30"))
-#ShinyGR(ObsDF = carlsfeld[, c('X', 'Prec', 'ETo', 'BachOst', 'T')], SimPer = c("2018-01-08", "2021-09-30"))
+ShinyGR(ObsDF = list("BachOst" = carlsfeld[, c('X', 'Prec', 'ETo', 'BachOst', 'T')], "Wilzsch" = carlsfeld[, c('X', 'Prec', 'ETo', 'Wilzsch', 'T')]),
+                     SimPer = c('2011-10-01', '2021-09-30'))
 
 
 
