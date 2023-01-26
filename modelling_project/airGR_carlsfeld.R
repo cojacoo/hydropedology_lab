@@ -7,11 +7,15 @@ library(lubridate)
 carlsfeld <- read.csv('WBcarlsfeld1D.csv', header = TRUE, stringsAsFactors = FALSE)
 carlsfeld$X <- as.POSIXct(carlsfeld$X, tz = 'UTC')
 carlsfeld$ETo[carlsfeld$ETo<0.] <- 0.
-carlsfeld$BachOst[carlsfeld$BachOst<0.0001] <- 0.0001
-carlsfeld$Wilzsch[carlsfeld$Wilzsch<0.0001] <- 0.0001
+carlsfeld$BachOst[carlsfeld$BachOst<0.0001] <- NA
+carlsfeld$Wilzsch[carlsfeld$Wilzsch<0.0001] <- NA
+carlsfeld$KleineBockau[carlsfeld$KleineBockau<0.0001] <- NA
+carlsfeld <- carlsfeld %>% mutate(BachOst = na.approx(BachOst))
+carlsfeld <- carlsfeld %>% mutate(Wilzsch = na.approx(Wilzsch))
+carlsfeld <- carlsfeld %>% mutate(KleineBockau = na.approx(KleineBockau))
 carlsfeld <- carlsfeld %>% mutate(T = na.approx(T))
 
-ShinyGR(ObsDF = list("BachOst" = carlsfeld[, c('X', 'Prec', 'ETo', 'BachOst', 'T')], "Wilzsch" = carlsfeld[, c('X', 'Prec', 'ETo', 'Wilzsch', 'T')]),
+ShinyGR(ObsDF = list("BachOst" = carlsfeld[, c('X', 'Prec', 'ETo', 'BachOst', 'T')], "Wilzsch" = carlsfeld[, c('X', 'Prec', 'ETo', 'Wilzsch', 'T')], "KleineBockau" = carlsfeld[, c('X', 'Prec', 'ETo', 'KleineBockau', 'T')]),
                      SimPer = c('2011-10-01', '2021-09-30'))
 
 
