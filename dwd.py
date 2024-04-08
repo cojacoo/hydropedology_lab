@@ -153,7 +153,7 @@ def dwd_recent(stationname='Emden',freq='daily',param='precip',ti='recent'):
     return dummy
     #return http_fi
 
-@numba.jit
+#@numba.jit
 def Te_opt(T_e,gammax, vabar):
     maxdeltaT_e = 1.
     maxit = 9999999
@@ -280,8 +280,27 @@ def ET_SzilagyiJozsa(data, Elev = 120., lat = 53.5, windfunction_ver='1948', alp
 
     return ET_Daily,Epenman_Daily,E_PT_T_e
 
+def daylight(datex,loci=(50.424, 12.597)):
+    #calculate hourly daylight distribution from date and location
+    #datex :: datetime
+    #loci :: tuple of lat lon
+    #returns :: hourly share of daylight as np.array
+    
+    from astral import LocationInfo
+    from astral.sun import sun
 
-def resample_DWD(stat='Norderney',calc_et=False, histo=False, ETclean0=True, rss='1D'):
+    sx = np.zeros(240)
+    s = sun(LocationInfo(loci[0], loci[1]).observer, datex)
+    s1 = int(s["sunrise"].hour*10+s["sunrise"].minute/6.)
+    s2 = int(s["sunset"].hour*10+s["sunset"].minute/6.)
+    sk = np.sin(np.arange(0,np.pi,np.pi/(s2-s1)))
+    sx[s1:s1+len(sk)] = sk
+    sx /= np.sum(sx)
+    
+    return np.sum(np.reshape(sx, (24, 10)), axis=1)
+
+
+def resample_DWD(stat='Norderney',alt_stat='Norderney',calc_et=False, histo=False, ETclean0=True, rss='1D'):
     if (rss=='1H'):
         get_freq='hourly'
     else:
@@ -293,11 +312,14 @@ def resample_DWD(stat='Norderney',calc_et=False, histo=False, ETclean0=True, rss
         try:
             dummy4 = dwd_recent(stat,'hourly','solar')
         except:
-            dummy4 = dwd_recent('Norderney','hourly','solar')
-            print('Used Norderney Solar radiation because no radiation data at station!')
+            dummy4 = dwd_recent(alt_stat,'hourly','solar')
+            print('Used '+alt_stat+' Solar radiation because no radiation data at station!')
         dummy5 = dwd_recent(stat,'hourly','wind')
-        dummy6 = dwd_recent(stat,'hourly','pressure')
-    
+        try:
+            dummy6 = dwd_recent(stat,'hourly','pressure')
+        except:
+            dummy6 = dwd_recent(alt_stat,'hourly','pressure')
+            print('Used '+alt_stat+' atmospheric pressure because no pressure data at station!')
         dummyx = pd.concat([dummy3.TT_TU.resample(rss).mean(), # > AirT_2m °C
                         dummy3.TT_TU.resample(rss).min(),
                         dummy3.TT_TU.resample(rss).max(),
@@ -314,22 +336,30 @@ def resample_DWD(stat='Norderney',calc_et=False, histo=False, ETclean0=True, rss
         if get_freq == 'hourly':
             try:
                 dummy4h = dwd_recent(stat, get_freq, 'solar', 'historical')
-                rad = dummy4h.FG_LBERG.resample(rss).sum()
             except:
-                dummy4h = dwd_recent('Norderney', get_freq, 'solar','historical')
-                print('Used Norderney Solar radiation because no radiation data at station!')
-                rad = dummy4h.FG_LBERG.resample(rss).sum()
+                dummy4h = dwd_recent(alt_stat, get_freq, 'solar','historical')
+                print('Used '+alt_stat+' Solar radiation because no radiation data at station!')
+            if type(dummy4h)==str:
+                dummy4h = dwd_recent(alt_stat, get_freq, 'solar','historical')
+                print('Used '+alt_stat+' Solar radiation because no radiation data at station!')
 
             dummy1h = dwd_recent(stat,get_freq,'precip','historical')
             dummy3h = dwd_recent(stat,get_freq,'temp','historical')
             dummy5h = dwd_recent(stat,get_freq,'wind','historical')
-            dummy6h = dwd_recent(stat,get_freq,'pressure','historical')
+            try:
+                dummy6h = dwd_recent(stat,get_freq,'pressure','historical')
+            except:
+                dummy6h = dwd_recent(alt_stat,get_freq,'pressure','historical')
+                print('Used '+alt_stat+' atmospheric pressure because no pressure data at station!')
+            if type(dummy6h)==str:
+                dummy6h = dwd_recent(alt_stat,get_freq,'pressure','historical')
+                print('Used '+alt_stat+' atmospheric pressure because no pressure data at station!')
 
             dummyxh = pd.concat([dummy3h.TT_TU.resample(rss).mean(), # > AirT_2m °C
                              dummy3h.TT_TU.resample(rss).min(),
                              dummy3h.TT_TU.resample(rss).max(),
                              dummy1h['  R1'].resample(rss).sum(), # > precip mm
-                             rad.loc[dummy3h.index[0]:], # > hourly sum of solar incoming radiation J/cm^2
+                             dummy4h.FG_LBERG.resample(rss).sum().loc[dummy3h.index[0]:], # > hourly sum of solar incoming radiation J/cm^2
                              dummy3h.RF_TU.resample(rss).min(), # > RH_2m
                              dummy3h.RF_TU.resample(rss).max(),
                              dummy5h['   F'].resample(rss).mean(), # > mean windspeed m/s
@@ -392,5 +422,23 @@ def resample_DWD(stat='Norderney',calc_et=False, histo=False, ETclean0=True, rss
             dummyx.columns = ['T','Tmin','Tmax','Prec','Rad','Rs','RH','u2','u2mx','vap','aP','EToPM','EToHG','EToSJ','EToPM2','EToPT']
         else:
             dummyx.columns = ['T','Tmin','Tmax','Prec','Rad','RHmin','RHmax','u2','aP','EToPM','EToHG','EToSJ','EToPM2','EToPT']
+
+    elif ((calc_et==True) & (rss=='1H')):
+        # aggregate to daily time series of weather
+        weather1D = dummyx.resample('1D').agg({'T': 'mean', 'Tmin': 'min', 'Tmax': 'max', 'Prec': 'sum', 'Rad': 'sum', 'RHmin': 'min', 'RHmax': 'max','u2': 'mean', 'aP':'mean'})
+        [latx, lonx] = dwd_stations().loc[dwd_stationno(stat),['geoBreite','geoLaenge']]
+
+        # calculate daily ET and distribute it over day based on dailight curve
+        ET0SJ, ET0PM, ET0PT = ET_SzilagyiJozsa(weather1D,Elev = 900., lat = latx)
+        dummyk = pd.concat([ET0SJ, ET0PM, ET0PT],axis=1)
+        dummyk.columns = ['ET0SJ', 'ET0PM', 'ET0PT']
+        weather1D = pd.concat([weather1D,dummyk],axis=1)
+
+        dummyx[['ET0SJ', 'ET0PM', 'ET0PT']] = np.nan
+        for i in weather1D.index:
+            daylightdist = daylight(i,(latx, lonx))
+            dummyx.loc[i:i+pd.Timedelta('23h'),'ET0SJ'] = weather1D.loc[i,'ET0SJ'] * daylightdist
+            dummyx.loc[i:i+pd.Timedelta('23h'),'ET0PM'] = weather1D.loc[i,'ET0PM'] * daylightdist
+            dummyx.loc[i:i+pd.Timedelta('23h'),'ET0PT'] = weather1D.loc[i,'ET0PT'] * daylightdist
         
     return dummyx

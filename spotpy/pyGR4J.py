@@ -1,7 +1,7 @@
 # GR4J hydrological bucket model after Fabrizo Fenicia
 
 import numpy as np
-from numba import jit
+#from numba import jit
 
 # HELPER FUNCTIONS:
 def SS1(i,tBase):
